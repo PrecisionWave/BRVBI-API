@@ -54,7 +54,7 @@ int RxThreadFunction(void* pParam)
 	// thread loop
 	while(1)
 	{
-		nRet = pControl->m_StopEvent.CheckEvent(10);
+		nRet = pControl->m_StopEvent.CheckEvent(0);
 		if(nRet)
 		{
 			break;
@@ -89,6 +89,7 @@ void BRVBIControl::streamFunction() {
 	{
 		std::cout << "Data reception failed" << std::endl;
 	}
+
 	// read operation
 	nRet = recv(m_nTransferSocket, &m_StreamBuffer[m_nStreamBufferSize], 32768, 0);
 	// all done
@@ -428,7 +429,7 @@ int BRVBIControl::stopStream()
 		nRet = m_StoppedEvent.CheckEvent(2000);
 		if(!nRet)
 		{
-			std::cout << "Stopping RX Thread failed";
+			std::cout << "Stopping RX Thread failed" << std::endl;
 		}
 
 		// reset all information
@@ -542,7 +543,7 @@ uint32_t BRVBIControl::getStreamData(uint32_t dwTimeout, uint32_t dwAcquisitionS
 		}
 		else {
 			// allow idle time (10ms)
-			tv.tv_sec = 1;
+			tv.tv_sec = 0;
 			tv.tv_usec = 10000;
 			select(0, NULL, NULL, NULL, &tv);
 		}

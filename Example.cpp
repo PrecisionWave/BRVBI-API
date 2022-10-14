@@ -30,6 +30,12 @@ int main(int argc, char **argv) {
 	short			qData[IQ_BUFFER_SIZE];
 	short			iqData[IQ_BUFFER_SIZE*2];
 
+	std::string 	ipAddress;
+	std::string		iqFilename;
+	double 			dCenterFrequencyMHz;
+	uint32_t 		dwSamplingClock;
+	uint32_t 		dwAcquisitionSize;
+
 	// command line arguments handling
 	cxxopts::Options options("BRVBIExample", "BRVBI IQ Stream Demo");
 	options.add_options()
@@ -40,25 +46,29 @@ int main(int argc, char **argv) {
 		("f,iq-file", "Target IQ data file", cxxopts::value<std::string>())
 	    ("h,help", "Print usage");
 
-	auto arguments = options.parse(argc, argv);
-	if (arguments.count("help"))
+	try
 	{
-		std::cout << options.help() << std::endl;
-		exit(EXIT_SUCCESS);
-	}
+		auto arguments = options.parse(argc, argv);
+		if (arguments.count("help"))
+		{
+			std::cout << options.help() << std::endl;
+			exit(EXIT_SUCCESS);
+		}
 
-	if (!arguments.count("center-frequency") || !arguments.count("sampling-clock") || !arguments.count("acquisition-size") || !arguments.count("iq-file"))
+		ipAddress = arguments["ip-address"].as<std::string>();
+		dCenterFrequencyMHz = arguments["center-frequency"].as<double>();
+		dwSamplingClock = arguments["sampling-clock"].as<uint32_t>();
+		dwAcquisitionSize = arguments["acquisition-size"].as<uint32_t>();
+		iqFilename = arguments["iq-file"].as<std::string>();
+	}
+	catch(cxxopts::OptionException& e)
 	{
-		std::cout << "Missing argument(s)!" << std::endl;
+		std::cout << "Argument error:" << std::endl << e.what() << std::endl << std::endl << options.help() << std::endl;
 		exit(EXIT_FAILURE);
 	}
 
 	// connect to receiver
-	nRet = control.init(
-			arguments["ip-address"].as<std::string>(),
-			arguments["center-frequency"].as<double>(),
-			arguments["sampling-clock"].as<uint32_t>(),
-			arguments["acquisition-size"].as<uint32_t>());
+	nRet = control.init(ipAddress, dCenterFrequencyMHz, dwSamplingClock, dwAcquisitionSize);
 	if(nRet) {
 		std::cout << "Initialization failed!" << std::endl;
 		exit(EXIT_FAILURE);
@@ -78,7 +88,7 @@ int main(int argc, char **argv) {
 	/////////////////////////////
 
 	// open file
-	std::ofstream outputFile(arguments["iq-file"].as<std::string>() , std::ios::binary );
+	std::ofstream outputFile(iqFilename , std::ios::binary );
 
 	// set up cancellation option
 	cancelFlag = false;
@@ -89,7 +99,7 @@ int main(int argc, char **argv) {
 	std::cout << "Data reception started, press 'Ctrl+C' to terminate..." << std::endl;
 	while(!cancelFlag)
 	{
-		nRet = control.getStreamData(500, IQ_BUFFER_SIZE, iData, qData);
+		nRet = control.getStreamData(100, IQ_BUFFER_SIZE, iData, qData);
 		if(nRet == IQ_BUFFER_SIZE)
 		{
 			// interleave IQ
@@ -102,13 +112,14 @@ int main(int argc, char **argv) {
 			outputFile.write((char const*)&iqData[0], IQ_BUFFER_SIZE*2*sizeof(short));
 
 			dwMessageCount++;
-			std::cout << "Acquisitions received: " << dwMessageCount << '\r'	<< std::flush;
-		}
-		else
-		{
-			std::cout << "Data RX failed" << std::endl;
+			if(!cancelFlag)
+			{
+				std::cout << "Data blocks received: " << dwMessageCount << '\r' << std::flush;
+			}
 		}
 	}
+
+	std::cout << std::endl;
 
 	// stop stream
 	nRet = control.stopStream();
