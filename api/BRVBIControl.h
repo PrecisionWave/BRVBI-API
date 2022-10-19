@@ -20,7 +20,7 @@ public:
 	int init(std::string ipStr, double dCenterFrequencyInMHz, uint32_t dwSamplingClockInHz, uint32_t dwAcquisitionSize);
 	int startStream();
 	int stopStream();
-	uint32_t getStreamData(uint32_t dwTimeout, uint32_t dwAcquisitionSize, short* iData, short* qData, int nFlagMask = 7);
+	uint32_t getStreamData(uint32_t dwTimeout, uint32_t dwAcquisitionSize, short* iqData, int nFlagMask = 7);
 
 public:
 	// public because used in thread function

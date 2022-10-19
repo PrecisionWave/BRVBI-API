@@ -11,8 +11,6 @@
 #include "cxxopts.hpp"
 #include "api/BRVBIControl.h"
 
-#define IQ_BUFFER_SIZE 100000
-
 static bool cancelFlag;
 
 void CancelHandler(int)
@@ -26,15 +24,14 @@ int main(int argc, char **argv) {
 	int				nRet;
 	uint32_t		dwMessageIndex;
 	uint32_t 		dwMessageCount;
-	short			iData[IQ_BUFFER_SIZE];
-	short			qData[IQ_BUFFER_SIZE];
-	short			iqData[IQ_BUFFER_SIZE*2];
+	short*			iqData;
 
 	std::string 	ipAddress;
 	std::string		iqFilename;
 	double 			dCenterFrequencyMHz;
 	uint32_t 		dwSamplingClock;
 	uint32_t 		dwAcquisitionSize;
+	uint32_t		dwIQDataSize;
 
 	// command line arguments handling
 	cxxopts::Options options("BRVBIExample", "BRVBI IQ Stream Demo");
@@ -44,6 +41,7 @@ int main(int argc, char **argv) {
 		("s,sampling-clock", "Sampling Clock [Hz]", cxxopts::value<uint32_t>())
 		("a,acquisition-size", "Acquisition Size [#Samples]", cxxopts::value<uint32_t>())
 		("f,iq-file", "Target IQ data file", cxxopts::value<std::string>())
+		("b,block-size", "Block size for file writing [#Samples]", cxxopts::value<uint32_t>()->default_value("10000"))
 	    ("h,help", "Print usage");
 
 	try
@@ -60,6 +58,7 @@ int main(int argc, char **argv) {
 		dwSamplingClock = arguments["sampling-clock"].as<uint32_t>();
 		dwAcquisitionSize = arguments["acquisition-size"].as<uint32_t>();
 		iqFilename = arguments["iq-file"].as<std::string>();
+		dwIQDataSize = arguments["block-size"].as<uint32_t>();
 	}
 	catch(cxxopts::OptionException& e)
 	{
@@ -94,22 +93,18 @@ int main(int argc, char **argv) {
 	cancelFlag = false;
 	signal(SIGINT, CancelHandler);
 
+	// prepare IQ data buffer
+	iqData = (short*)calloc(dwIQDataSize*2, sizeof(short));
+
 	// start RX
 	dwMessageCount = 0;
 	std::cout << "Data reception started, press 'Ctrl+C' to terminate..." << std::endl;
 	while(!cancelFlag)
 	{
-		nRet = control.getStreamData(100, IQ_BUFFER_SIZE, iData, qData);
-		if(nRet == IQ_BUFFER_SIZE)
+		nRet = control.getStreamData(2000, dwIQDataSize, iqData);
+		if(nRet == dwIQDataSize)
 		{
-			// interleave IQ
-			for(int i = 0; i < IQ_BUFFER_SIZE; i++)
-			{
-				iqData[2*i] = iData[i];
-				iqData[2*i+1] = qData[i];
-			}
-
-			outputFile.write((char const*)&iqData[0], IQ_BUFFER_SIZE*2*sizeof(short));
+			outputFile.write((char const*)&iqData[0], dwIQDataSize*2*sizeof(short));
 
 			dwMessageCount++;
 			if(!cancelFlag)
@@ -120,7 +115,7 @@ int main(int argc, char **argv) {
 	}
 
 	std::cout << std::endl;
-
+	
 	// stop stream
 	nRet = control.stopStream();
 	if(nRet) {
@@ -130,7 +125,8 @@ int main(int argc, char **argv) {
 
 	// close iq file
 	outputFile.close();
-
+	free(iqData);
+	
 	// reset cancellation procedure to default
 	signal(SIGINT, SIG_DFL);
 

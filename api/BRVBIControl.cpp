@@ -266,7 +266,7 @@ int BRVBIControl::init(std::string ipStr, double dCenterFrequencyInMHz, uint32_t
 	// connect attempt
 	nRet = connect(m_nControlSocket, &socketAddr, sizeof(socketAddr));
 	if (nRet) {
-		std::cout << "Connection error: " << errno << std::endl;
+		std::cout << "Connection error: " << strerror(errno) << std::endl;
 		cleanUp();
 		return -1;
 	}
@@ -372,7 +372,7 @@ int BRVBIControl::init(std::string ipStr, double dCenterFrequencyInMHz, uint32_t
 		}
 
 		if (nRet != 0) {
-			std::cout << "Transfer socket preparation failed: " << nRet	<< std::endl;
+			std::cout << "Transfer socket preparation failed: " << strerror(nRet) << std::endl;
 			cleanUp();
 			return -1;
 		}
@@ -451,28 +451,18 @@ int BRVBIControl::stopStream()
 	return 0;
 }
 
-uint32_t BRVBIControl::getStreamData(uint32_t dwTimeout, uint32_t dwAcquisitionSize, short* iData, short* qData, int nFlagMask)
+uint32_t BRVBIControl::getStreamData(uint32_t dwTimeout, uint32_t dwAcquisitionSize, short* iqData, int nFlagMask)
 {
 	// retrieves the samples from the last measurement, returns the data size (0 in case of error)
-	int			i;
 	int			nBlockWanted;
 	int			nBlockReceived;
-	int			nDiff;
 	uint32_t	dwS;
 	uint32_t	dwTime;
 	uint32_t	dwL;
-	uint32_t	dwP;
-	uint32_t	dw;
-	short		iqData[4096];
-	double		dIQTime;
+	short		data[4096];
 	uint64_t	ulIQTime;
 	double		dScaling;
 	int			nFlag;
-	double*		scalingArray;
-	double		dMinScale;
-	double		dMaxScale;
-	double		dDiff;
-	uint64_t*	timeArray;
 	timeval 	tv;
 
 	// set the time bound
@@ -482,10 +472,6 @@ uint32_t BRVBIControl::getStreamData(uint32_t dwTimeout, uint32_t dwAcquisitionS
 		nBlockWanted	= dwAcquisitionSize/m_nStreamBlockSizeInSamples + 1;
 	else
 		nBlockWanted	= dwAcquisitionSize / m_nStreamBlockSizeInSamples;
-	// prepare the containers to hold the information
-	scalingArray	= (double*) calloc(nBlockWanted, sizeof(double));
-	timeArray		= (uint64_t*) calloc(nBlockWanted, sizeof(uint64_t));
-	// adjust the positions for spot mode
 	// block copy loop
 	dwS				= 0;
 	nBlockReceived	= 0;
@@ -503,16 +489,13 @@ uint32_t BRVBIControl::getStreamData(uint32_t dwTimeout, uint32_t dwAcquisitionS
 				ulIQTime	= m_StreamBlockIQTime[m_nStreamBlockReadPosition];
 				dScaling	= m_StreamBlockScaling[m_nStreamBlockReadPosition];
 				nFlag		= m_StreamBlockFlag[m_nStreamBlockReadPosition] & nFlagMask;
-				memcpy (iqData, &m_AcquisitionBuffer[m_StreamBlockSamplePos[m_nStreamBlockReadPosition]], 2*m_nStreamBlockSizeInSamples*sizeof(short));
+				memcpy (data, &m_AcquisitionBuffer[m_StreamBlockSamplePos[m_nStreamBlockReadPosition]], 2*m_nStreamBlockSizeInSamples*sizeof(short));
 				m_nStreamBlockReadPosition	= (m_nStreamBlockReadPosition + 1) % m_nStreamBlockAlloc;
 				m_nStreamBlockSize--;
 			}
 			else {
 				// check for timeout
 				if (getTick() > dwTime) {
-					// clean up
-					free (scalingArray);
-					free (timeArray);
 					// report error
 					return 0;
 				}
@@ -526,18 +509,11 @@ uint32_t BRVBIControl::getStreamData(uint32_t dwTimeout, uint32_t dwAcquisitionS
 		}
 		// check for valid information
 		if (nFlag == 0) {
-			// meta information
-			scalingArray[nBlockReceived]	= dScaling;
-			timeArray[nBlockReceived]		= ulIQTime;
 			// copy operation
 			dwL	= dwAcquisitionSize - dwS;
 			dwL	= std::min((uint32_t)2048, dwL);
-			dwP	= 0;
-			for (dw=0; dw<dwL; dw++) {
-				iData[dwS]	= iqData[dwP++];
-				qData[dwS]	= iqData[dwP++];
-				dwS++;
-			}
+			memcpy(&iqData[dwS*2], data, 2*dwL*sizeof(short));
+			dwS += dwL;
 			// next block
 			nBlockReceived++;
 		}
@@ -548,35 +524,7 @@ uint32_t BRVBIControl::getStreamData(uint32_t dwTimeout, uint32_t dwAcquisitionS
 			select(0, NULL, NULL, NULL, &tv);
 		}
 	}
-	// scaling handling
-	dScaling		= scalingArray[0];
-	dMinScale	= dScaling;
-	dMaxScale	= dScaling;
-	for (i=1; i<nBlockReceived; i++) {
-		dScaling		= scalingArray[i];
-		dMaxScale	= std::max(dMaxScale, dScaling);
-		dMinScale	= std::min(dMinScale, dScaling);
-	}
-	if (dMaxScale - dMinScale) {
-		dScaling	= dMaxScale;
-		for (i=0; i<nBlockReceived; i++) {
-			dDiff	= scalingArray[i] - dScaling;
-			if (dDiff) {
-				dDiff	= pow(10.0, dDiff/20.0);
-				dwP	= i * 2048;
-				dwL	= std::min(dwP + 2048, dwAcquisitionSize);
-				while (dwP < dwL) {
-					iData[dwP]	= short(iData[dwP]*dDiff + 0.5);
-					qData[dwP]	= short(qData[dwP]*dDiff + 0.5);
-					dwP++;
-				}
-			}
-		}
-	}
-	// clean up
-	free (scalingArray);
-	free (timeArray);
-	// all done
+	
 	return dwAcquisitionSize;
 }
 
