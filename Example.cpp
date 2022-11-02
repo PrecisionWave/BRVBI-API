@@ -69,6 +69,7 @@ int main(int argc, char **argv) {
 
 	std::cout << std::endl << "### BRVBI2File ###" << std::endl << std::endl;
 	
+	// parameter check
 	nRet = control.checkParams(dCenterFrequencyMHz, dwSamplingClock, dwIQDataSize);
 	if(nRet)
 	{
@@ -92,12 +93,8 @@ int main(int argc, char **argv) {
 	}
 	std::cout << "Streaming started" << std::endl;
 
-	/////////////////////////////
-	// Stream reception Loop
-	/////////////////////////////
-
 	// open file
-	std::ofstream outputFile(iqFilename , std::ios::binary );
+	std::ofstream outputFile(iqFilename, std::ios::binary);
 
 	// set up cancellation option
 	cancelFlag = false;
@@ -112,9 +109,11 @@ int main(int argc, char **argv) {
 	std::cout << "Data reception started, press 'Ctrl+C' to terminate..." << std::endl;
 	while(!cancelFlag)
 	{
+		// request data
 		nRet = control.getStreamData(dwTimeout, dwIQDataSize, iqData);
 		if(nRet == dwIQDataSize)
 		{
+			// save to file
 			outputFile.write((const char*)&iqData[0], dwIQDataSize*2*sizeof(short));
 
 			dwMessageCount++;
@@ -123,8 +122,6 @@ int main(int argc, char **argv) {
 				std::cout << "Data blocks written: " << dwMessageCount << '\r' << std::flush;
 			}
 		}
-		if(nRet == 0)
-			std::cout << "GetStreamData timeout" << std::endl;
 	}
 
 	std::cout << std::endl;
