@@ -17,10 +17,12 @@ class BRVBIControl {
 public:
 	BRVBIControl();
 	virtual ~BRVBIControl();
+	
+	int checkParams(double dCenterFrequencyInMHz, uint32_t dwSamplingClockInHz, uint32_t dwRxSize);
 	int init(std::string ipStr, double dCenterFrequencyInMHz, uint32_t dwSamplingClockInHz, uint32_t dwAcquisitionSize);
 	int startStream();
 	int stopStream();
-	uint32_t getStreamData(uint32_t dwTimeout, uint32_t dwAcquisitionSize, short* iqData, int nFlagMask = 7);
+	uint32_t getStreamData(uint32_t dwTimeout, uint32_t dwRxSize, short* iqData);
 
 public:
 	// public because used in thread function
@@ -30,6 +32,7 @@ public:
 
 private:
 	int processCommand(int nSocket, BRVBIControlMessage* pMsg);
+	bool tryGetDataFromBuffer(short* pData);
 	void cleanUp();
 
 	int 		m_nControlSocket;
@@ -39,10 +42,7 @@ private:
 	int			m_nStreamBufferSize;
 	int			m_nStreamBlockSizeInSamples;
 	int			m_nStreamBlockAlloc;
-	int*		m_StreamBlockFlag;
 	int*		m_StreamBlockSamplePos;
-	double*		m_StreamBlockScaling;
-	uint64_t*	m_StreamBlockIQTime;
 	uint32_t 	m_dwAcquisitionBufferAlloc;
 	short*		m_AcquisitionBuffer;
 	std::thread* m_pRXStreamThread;
@@ -51,6 +51,5 @@ private:
 	int			m_nStreamBlockWritePosition;
 	int			m_nStreamBlockReadPosition;
 	int			m_nStreamBlockSize;
-	int			m_nStreamReset;
 	int			m_nStreamRunning;
 };

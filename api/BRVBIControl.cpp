@@ -20,14 +20,10 @@ BRVBIControl::BRVBIControl() {
 	m_nStreamBufferSize 		= 0;
 	m_nStreamBlockSizeInSamples	= 0;
 	m_nStreamBlockAlloc 		= 0;
-	m_StreamBlockFlag 			= nullptr;
 	m_StreamBlockSamplePos 		= nullptr;
-	m_StreamBlockScaling 		= nullptr;
-	m_StreamBlockIQTime 		= nullptr;
 	m_dwAcquisitionBufferAlloc	= 0;
 	m_AcquisitionBuffer 		= nullptr;
 	m_dwMessageIndex			= 0;
-	m_nStreamReset				= 0;
 	m_nStreamBlockSize			= 0;
 	m_nStreamBlockWritePosition	= 0;
 	m_nStreamBlockReadPosition	= 0;
@@ -103,16 +99,15 @@ void BRVBIControl::streamFunction() {
 				break;
 			{
 				std::lock_guard<std::mutex> localLock(m_StreamMutex);
+
 				// copy operation
-				m_StreamBlockScaling[m_nStreamBlockWritePosition] = rxMessage.m_dScaling;
-				m_StreamBlockIQTime[m_nStreamBlockWritePosition] = rxMessage.m_ulAbsTime;
-				m_StreamBlockFlag[m_nStreamBlockWritePosition] = rxMessage.m_wFlags;
 				memcpy(&m_AcquisitionBuffer[m_StreamBlockSamplePos[m_nStreamBlockWritePosition]],
 					rxMessage.m_SampleData,
 					2 * rxMessage.m_wSampleCount * sizeof(short));
+
 				m_nStreamBlockWritePosition = (m_nStreamBlockWritePosition + 1) % m_nStreamBlockAlloc;
 				if (m_nStreamBlockSize == m_nStreamBlockAlloc) {
-					m_nStreamReset = 1;
+					std::cout << std::endl << "Block Buffer overflow" << std::endl;
 					m_nStreamBlockReadPosition = m_nStreamBlockWritePosition;// last valid block
 				} else
 				m_nStreamBlockSize++;
@@ -227,6 +222,27 @@ void BRVBIControl::cleanUp()
 	m_nStreamRunning	= 0;
 }
 
+int BRVBIControl::checkParams(double dCenterFrequencyInMHz, uint32_t dwSamplingClockInHz, uint32_t dwRxSize)
+{
+	int nRet;
+
+	if(dCenterFrequencyInMHz < 1.0 || dCenterFrequencyInMHz > 900.0)
+	{
+		std::cout << "Invalid Center Frequency (" << dCenterFrequencyInMHz << "): Must be between 1.0 MHz and 900.0 MHz" << std::endl;
+		nRet = -1;
+	}
+	if(dwSamplingClockInHz == 0 || 30720000 % dwSamplingClockInHz != 0)
+	{
+		std::cout << "Invalid Sampling Clock (" << dwSamplingClockInHz << "): allowed are integer divisors of 30.72 MHz" << std::endl;
+		nRet = -1;
+	}
+	if(dwRxSize % 2048)
+	{
+		std::cout << "Invalid RX Block (" << dwRxSize << "): only multiples of 2048 are supported" << std::endl;
+		nRet = -1;
+	}
+}
+
 int BRVBIControl::init(std::string ipStr, double dCenterFrequencyInMHz, uint32_t dwSamplingClockInHz, uint32_t dwAcquisitionSize) {
 	SInputConfiguration sInputConfig;
 	sockaddr	socketAddr;
@@ -311,12 +327,9 @@ int BRVBIControl::init(std::string ipStr, double dCenterFrequencyInMHz, uint32_t
 
 	// set up buffers
 	m_nStreamBlockSizeInSamples = 2048;
-	nSize = 3 * dwAcquisitionSize / m_nStreamBlockSizeInSamples;
+	nSize = 2 * 3 * dwAcquisitionSize / m_nStreamBlockSizeInSamples;
 	m_nStreamBlockAlloc = nSize;
-	m_StreamBlockFlag = (int*) calloc(m_nStreamBlockAlloc, sizeof(int));
-	m_StreamBlockIQTime = (uint64_t*) calloc(m_nStreamBlockAlloc, sizeof(uint64_t));
 	m_StreamBlockSamplePos = (int*) calloc(m_nStreamBlockAlloc, sizeof(int));
-	m_StreamBlockScaling = (double*) calloc(m_nStreamBlockAlloc, sizeof(double));
 	m_dwAcquisitionBufferAlloc = m_nStreamBlockAlloc * m_nStreamBlockSizeInSamples * 2;		// iq pairs
 	m_AcquisitionBuffer = (short*) calloc(m_dwAcquisitionBufferAlloc, sizeof(short));
 
@@ -406,8 +419,7 @@ int BRVBIControl::startStream()
 	m_nStreamBlockReadPosition		= 0;
 	m_nStreamBlockWritePosition	= 0;
 	m_nStreamBufferSize				= 0;
-	m_nStreamReset						= 0;
-
+	
 	m_pRXStreamThread = new std::thread(RxThreadFunction, this);
 	m_pRXStreamThread->detach();
 	if(m_pRXStreamThread) {
@@ -451,7 +463,7 @@ int BRVBIControl::stopStream()
 	return 0;
 }
 
-uint32_t BRVBIControl::getStreamData(uint32_t dwTimeout, uint32_t dwAcquisitionSize, short* iqData, int nFlagMask)
+uint32_t BRVBIControl::getStreamData(uint32_t dwTimeout, uint32_t dwRxSize, short* iqData)
 {
 	// retrieves the samples from the last measurement, returns the data size (0 in case of error)
 	int			nBlockWanted;
@@ -460,71 +472,59 @@ uint32_t BRVBIControl::getStreamData(uint32_t dwTimeout, uint32_t dwAcquisitionS
 	uint32_t	dwTime;
 	uint32_t	dwL;
 	short		data[4096];
-	uint64_t	ulIQTime;
-	double		dScaling;
-	int			nFlag;
 	timeval 	tv;
 
 	// set the time bound
 	dwTime	= getTick() + dwTimeout;
 	// get the block count
-	if (dwAcquisitionSize % m_nStreamBlockSizeInSamples)
-		nBlockWanted	= dwAcquisitionSize/m_nStreamBlockSizeInSamples + 1;
+	if (dwRxSize % m_nStreamBlockSizeInSamples)
+		nBlockWanted	= dwRxSize/m_nStreamBlockSizeInSamples + 1;
 	else
-		nBlockWanted	= dwAcquisitionSize / m_nStreamBlockSizeInSamples;
+		nBlockWanted	= dwRxSize / m_nStreamBlockSizeInSamples;
 	// block copy loop
 	dwS				= 0;
 	nBlockReceived	= 0;
-	while (dwS < dwAcquisitionSize) {
-		// lock section
+	while (dwS < dwRxSize) {
+		bool doCopy = tryGetDataFromBuffer(&data[0]);
+		
+		if(doCopy)
 		{
-			std::lock_guard<std::mutex> localLock(m_StreamMutex);
-			nFlag	= -1;		// skip indicator
-			if (m_nStreamReset) {
-				dwS				= 0;
-				nBlockReceived	= 0;
-				m_nStreamReset	= 0;
-			}
-			if (m_nStreamBlockSize) {
-				ulIQTime	= m_StreamBlockIQTime[m_nStreamBlockReadPosition];
-				dScaling	= m_StreamBlockScaling[m_nStreamBlockReadPosition];
-				nFlag		= m_StreamBlockFlag[m_nStreamBlockReadPosition] & nFlagMask;
-				memcpy (data, &m_AcquisitionBuffer[m_StreamBlockSamplePos[m_nStreamBlockReadPosition]], 2*m_nStreamBlockSizeInSamples*sizeof(short));
-				m_nStreamBlockReadPosition	= (m_nStreamBlockReadPosition + 1) % m_nStreamBlockAlloc;
-				m_nStreamBlockSize--;
-			}
-			else {
-				// check for timeout
-				if (getTick() > dwTime) {
-					// report error
-					return 0;
-				}
-			}
-		}
-		// handle the flag information
-		if (nFlag > 0) {				// negative value indicates missing information
-			dwS				= 0;		// remove all existing information in any case
-			nBlockReceived	= 0;
-			nFlag				%= BRVBI_DATA_PACKET_FLAG_STREAMINGBREAK;		// message with overflow indicator contains valid information
-		}
-		// check for valid information
-		if (nFlag == 0) {
 			// copy operation
-			dwL	= dwAcquisitionSize - dwS;
+			dwL	= dwRxSize - dwS;
 			dwL	= std::min((uint32_t)2048, dwL);
 			memcpy(&iqData[dwS*2], data, 2*dwL*sizeof(short));
 			dwS += dwL;
 			// next block
 			nBlockReceived++;
 		}
-		else {
-			// allow idle time (10ms)
+		else
+		{
+			// check for timeout
+			if (getTick() > dwTime) {
+				// report error
+				return 0;
+			}
+			
+			// allow idle time (0.1ms)
 			tv.tv_sec = 0;
-			tv.tv_usec = 10000;
+			tv.tv_usec = 100;
 			select(0, NULL, NULL, NULL, &tv);
 		}
 	}
 	
-	return dwAcquisitionSize;
+	return dwRxSize;
 }
 
+bool BRVBIControl::tryGetDataFromBuffer(short* pData)
+{
+	std::lock_guard<std::mutex> localLock(m_StreamMutex);
+	
+	if (m_nStreamBlockSize) {
+		memcpy (pData, &m_AcquisitionBuffer[m_StreamBlockSamplePos[m_nStreamBlockReadPosition]], 2*m_nStreamBlockSizeInSamples*sizeof(short));
+		m_nStreamBlockReadPosition	= (m_nStreamBlockReadPosition + 1) % m_nStreamBlockAlloc;
+		m_nStreamBlockSize--;
+		return true;
+	}	
+
+	return false;
+}

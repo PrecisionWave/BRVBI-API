@@ -32,9 +32,10 @@ int main(int argc, char **argv) {
 	uint32_t 		dwSamplingClock;
 	uint32_t 		dwAcquisitionSize;
 	uint32_t		dwIQDataSize;
+	uint32_t		dwTimeout;
 
 	// command line arguments handling
-	cxxopts::Options options("BRVBIExample", "BRVBI IQ Stream Demo");
+	cxxopts::Options options("BRVBI2File", "BRVBI IQ Stream Demo");
 	options.add_options()
 		("i,ip-address", "IPv4 Address of the receiver", cxxopts::value<std::string>())
 		("c,center-frequency", "Center Frequency [MHz]", cxxopts::value<double>())
@@ -63,6 +64,15 @@ int main(int argc, char **argv) {
 	catch(cxxopts::OptionException& e)
 	{
 		std::cout << "Argument error:" << std::endl << e.what() << std::endl << std::endl << options.help() << std::endl;
+		exit(EXIT_FAILURE);
+	}
+
+	std::cout << std::endl << "### BRVBI2File ###" << std::endl << std::endl;
+	
+	nRet = control.checkParams(dCenterFrequencyMHz, dwSamplingClock, dwIQDataSize);
+	if(nRet)
+	{
+		std::cout << "Parameter check failed!" << std::endl;
 		exit(EXIT_FAILURE);
 	}
 
@@ -98,20 +108,23 @@ int main(int argc, char **argv) {
 
 	// start RX
 	dwMessageCount = 0;
+	dwTimeout = dwIQDataSize < dwSamplingClock ? 2000 : (dwIQDataSize / dwSamplingClock + 2) * 1000;
 	std::cout << "Data reception started, press 'Ctrl+C' to terminate..." << std::endl;
 	while(!cancelFlag)
 	{
-		nRet = control.getStreamData(2000, dwIQDataSize, iqData);
+		nRet = control.getStreamData(dwTimeout, dwIQDataSize, iqData);
 		if(nRet == dwIQDataSize)
 		{
-			outputFile.write((char const*)&iqData[0], dwIQDataSize*2*sizeof(short));
+			outputFile.write((const char*)&iqData[0], dwIQDataSize*2*sizeof(short));
 
 			dwMessageCount++;
 			if(!cancelFlag)
 			{
-				std::cout << "Data blocks received: " << dwMessageCount << '\r' << std::flush;
+				std::cout << "Data blocks written: " << dwMessageCount << '\r' << std::flush;
 			}
 		}
+		if(nRet == 0)
+			std::cout << "GetStreamData timeout" << std::endl;
 	}
 
 	std::cout << std::endl;
@@ -124,6 +137,7 @@ int main(int argc, char **argv) {
 	}
 
 	// close iq file
+	outputFile.flush();
 	outputFile.close();
 	free(iqData);
 	
