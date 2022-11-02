@@ -226,6 +226,7 @@ int BRVBIControl::checkParams(double dCenterFrequencyInMHz, uint32_t dwSamplingC
 {
 	int nRet;
 
+	nRet = 0;
 	if(dCenterFrequencyInMHz < 1.0 || dCenterFrequencyInMHz > 900.0)
 	{
 		std::cout << "Invalid Center Frequency (" << dCenterFrequencyInMHz << "): Must be between 1.0 MHz and 900.0 MHz" << std::endl;
@@ -241,6 +242,8 @@ int BRVBIControl::checkParams(double dCenterFrequencyInMHz, uint32_t dwSamplingC
 		std::cout << "Invalid RX Block (" << dwRxSize << "): only multiples of 2048 are supported" << std::endl;
 		nRet = -1;
 	}
+
+	return nRet;
 }
 
 int BRVBIControl::init(std::string ipStr, double dCenterFrequencyInMHz, uint32_t dwSamplingClockInHz, uint32_t dwAcquisitionSize) {
