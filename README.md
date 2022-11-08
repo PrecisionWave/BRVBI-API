@@ -27,7 +27,7 @@ Public methods are defined in [BRVBIControl.h](https://github.com/PrecisionWave/
 
 ## Usage Example DAB recording
 To record a DAB signal with 2.048MHz sampling rate from channel 12C (227.36MHz) with acquisition size = DAB frame length = 96ms the following command works:\
-`./BRVBI2File -i 192.168.1.71 -c 227.36 -s 2048000 -a 196608 -f dab_12c.iq -b 196608`
+`./BRVBI2File -i 192.168.1.71 -c 227.36 -s 2048000 -a 196608 -f dab_12c.iq -b 196608`\
 
 ## Build Instructions
 The following instructions allow to build the sample application and provides help to write your own *cmake* application, using the BRVBI-API.
