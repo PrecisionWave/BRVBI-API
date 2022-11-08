@@ -13,8 +13,8 @@ Public methods are defined in [BRVBIControl.h](https://github.com/PrecisionWave/
  - getStreamData: returns interleaved 16bit IQ-Samples
 
 ## Example Project
-[Example.cpp](https://github.com/PrecisionWave/BRVBI-API/blob/main/Example.cpp) provides an example for the API usage. This command line application records IQ-data from the BRVBI into a file (16bit IQ interleaved).\
-`BRVBI IQ Stream Demo`\
+[Example.cpp](https://github.com/PrecisionWave/BRVBI-API/blob/main/Example.cpp) provides an example for the API usage. This command line application records IQ-data from the BR-VBI into a file (16bit IQ interleaved).\
+`BR-VBI IQ Stream Demo`\
 `Usage:`\
 `BRVBI2File [OPTION...]`\
 `  -i, --ip-address arg        IPv4 Address of the receiver`\
