@@ -25,6 +25,10 @@ Public methods are defined in [BRVBIControl.h](https://github.com/PrecisionWave/
 `  -b, --block-size arg        Block size for file writing [#Samples] (default: 10000)`\
 `  -h, --help                  Print usage`\
 
+## Usage Example DAB recording
+To record a DAB signal with 2.048MHz sampling rate from channel 12C (227.36MHz) with acquisition size = DAB frame length = 96ms the following command works:
+`./BRVBI2File -i 192.168.1.71 -c 227.36 -s 2048000 -a 196608 -f dab_12c.iq -b 196608`
+
 ## Build Instructions
 The following instructions allow to build the sample application and provides help to write your own *cmake* application, using the BRVBI-API.
 ### Prerequisites
@@ -37,4 +41,4 @@ The following instructions can be used to build a Release-Build:\
 `mkdir build`\
 `cd build`\
 `cmake -DCMAKE_BUILD_TYPE=Release ..`\
-`cmake --build .`\
+`cmake --build .`
