@@ -1,5 +1,5 @@
 # BRVBI-API
-This project provides the necessary code to access the **PrecisionWave BRVBI** SDR-Interface for **IQ Data Streaming** on **Linux-Machines**. More information about the hardware can be found here: [PrecisionWave BRVBI](https://www.precisionwave.com/products/signal-analyzers)\
+This project provides the necessary code to access the **PrecisionWave BR-VBI** SDR-Interface for **IQ Data Streaming** on **Linux-Machines**. More information about the hardware can be found here: [PrecisionWave BR-VBI](https://www.precisionwave.com/products/signal-analyzers)\
 *Please note that IQ-Streaming requires an additional option on the receiver.*
 
 ## API
@@ -8,7 +8,7 @@ All relevant files can be found in the subfolder [/api](https://github.com/Preci
 Public methods are defined in [BRVBIControl.h](https://github.com/PrecisionWave/BRVBI-API/blob/main/api/BRVBIControl.h):
 
  - checkParams: checks Frequency, SamplingRate and BlockSize for valid values.
- - init: initializes BRVBI communication and measurement
+ - init: initializes BR-VBI communication and measurement
  - startStream/stopStream: control streaming
  - getStreamData: returns interleaved 16bit IQ-Samples
 
