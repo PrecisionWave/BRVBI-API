@@ -192,6 +192,8 @@ int BRVBIControl::processCommand(int nSocket, BRVBIControlMessage* pMsg)
 				if (pMsg->m_dwIndex == dwIndex) {
 					switch (pMsg->m_bMessageType) {
 						case BRVBI_MESSAGE_TYPE_RX_ACK:
+						case BRVBI_MESSAGE_TYPE_RET_SERIAL:
+						case BRVBI_MESSAGE_TYPE_RET_VERSION:
 							return 0;
 						case BRVBI_MESSAGE_TYPE_RX_ERROR:
 							std::cout << "Process command: error code returned: " << pMsg->m_dwRxError << std::endl;
@@ -290,8 +292,35 @@ int BRVBIControl::init(std::string ipStr, double dCenterFrequencyInMHz, uint32_t
 		return -1;
 	}
 
-	// set HW configuration
+	// get BR-VBI serial
 	BRVBIControlMessage msg;
+	msg.m_dwIndex = m_dwMessageIndex++;
+	msg.m_bMessageType = BRVBI_MESSAGE_TYPE_GET_SERIAL;
+	nRet = processCommand(m_nControlSocket, &msg);
+	if (nRet || msg.m_bMessageType != BRVBI_MESSAGE_TYPE_RET_SERIAL) {
+		std::cout << "Get serial failed" << std::endl;
+		cleanUp();
+		return -1;
+	}
+	else {
+		std::cout << "BR-VBI device connected" << std::endl << "S/N: " << msg.m_strSerialNb << std::endl;
+	}
+	
+	// get BR-VBI version
+	msg.m_dwIndex = m_dwMessageIndex++;
+	msg.m_bMessageType = BRVBI_MESSAGE_TYPE_GET_VERSION;
+	nRet = processCommand(m_nControlSocket, &msg);
+	if (nRet || msg.m_bMessageType != BRVBI_MESSAGE_TYPE_RET_VERSION) {
+		std::cout << "Get version failed" << std::endl;
+		cleanUp();
+		return -1;
+	}
+	else {
+		std:: cout << "Version DSP: " << msg.m_strDSPVersion << std::endl;
+		std:: cout << "Version Control: " << msg.m_strBuildDate << std::endl;
+	}
+
+	// set HW configuration
 	msg.m_dwIndex = m_dwMessageIndex++;
 	msg.m_bMessageType = BRVBI_MESSAGE_TYPE_HW_CONFIGURE;
 	msg.m_bExtRef = 0;
